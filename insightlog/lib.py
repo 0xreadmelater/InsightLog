@@ -116,6 +116,8 @@ def get_web_requests(data, pattern, date_pattern=None, date_keys=None):
     :param date_keys: dict|None
     :return: list of dicts
     """
+     # BUG: Output format inconsistent with get_auth_requests - Done
+    # BUG: No handling/logging for malformed lines - Done
     if date_pattern and not date_keys:
         raise Exception("date_keys is not defined")
     requests_dict = re.findall(pattern, data, flags=re.IGNORECASE)
@@ -154,7 +156,7 @@ def get_auth_requests(data, pattern, date_pattern=None, date_keys=None):
     for request_tuple in requests_dict:
         str_datetime = __get_iso_datetime(request_tuple[0], date_pattern, date_keys) if date_pattern else request_tuple[0]
         parsed = analyze_auth_request(request_tuple[2])
-        parsed.update({
+        parsed.update({  # type: ignore
             'TYPE': 'auth',
             'DATETIME': str_datetime,
             'SERVICE': request_tuple[1],
@@ -172,21 +174,33 @@ def analyze_auth_request(request_info):
     """
     Analyze request info and returns main data (IP, invalid user, invalid password's user, is_preauth, is_closed)
     :param request_info: string
-    :return: dicts
+    :return: dict
     """
-    # BUG: No handling/logging for malformed lines
-    ipv4 = re.findall(IPv4_REGEX, request_info)
-    is_preauth = '[preauth]' in request_info.lower()
-    invalid_user = re.findall(AUTH_USER_INVALID_USER, request_info)
-    invalid_pass_user = re.findall(AUTH_PASS_INVALID_USER, request_info)
-    is_closed = 'connection closed by ' in request_info.lower()
-    return {'IP': ipv4[0] if ipv4 else None,
+    # BUG: No handling/logging for malformed lines  - Done
+    try:
+        ipv4 = re.findall(IPv4_REGEX, request_info)
+        invalid_user = re.findall(AUTH_USER_INVALID_USER, request_info)
+        invalid_pass_user = re.findall(AUTH_PASS_INVALID_USER, request_info)
+        is_preauth = '[preauth]' in request_info.lower()
+        is_closed = 'connection closed by ' in request_info.lower()
+
+        return {
+            'IP': ipv4[0] if ipv4 else None,
             'INVALID_USER': invalid_user[0] if invalid_user else None,
             'INVALID_PASS_USER': invalid_pass_user[0] if invalid_pass_user else None,
             'IS_PREAUTH': is_preauth,
-            'IS_CLOSED': is_closed}
+            'IS_CLOSED': is_closed
+        }
 
-
+    except Exception as e:
+        print(f"[!] Malformed auth log line: {request_info} — {e}")
+        return {
+            'IP': None,
+            'INVALID_USER': None,
+            'INVALID_PASS_USER': None,
+            'IS_PREAUTH': None,
+            'IS_CLOSED': None
+        }
 def __get_iso_datetime(str_date, pattern, keys):
     """
     Change raw datetime from logs to ISO 8601 format.
