@@ -6,6 +6,9 @@ from insightlog.validators import *
 from datetime import datetime
 import logging
 logging.basicConfig(level=logging.INFO)
+import json
+import csv
+import io
 
 
 def get_service_settings(service_name):
@@ -67,7 +70,7 @@ def filter_data(log_filter, data=None, filepath=None, is_casesensitive=True, is_
     """
     # BUG: This function returns None on error instead of raising -- Done(Akar)
     # BUG: No encoding handling in file reading (may crash on non-UTF-8 files) -- Done(Akar)
-    # TODO: Log errors/warnings instead of print
+    # TODO: Log errors/warnings instead of print -- Done(Akar)
     return_data = ""
     if filepath:
         try:
@@ -89,8 +92,8 @@ def filter_data(log_filter, data=None, filepath=None, is_casesensitive=True, is_
                 return_data += line+"\n"
         return return_data
     else:
-        # TODO: Better error message for missing data/filepath
-        raise Exception("Data and filepath values are NULL!")
+        # TODO: Better error message for missing data/filepath - Done(Akar)
+        raise Exception("Valid Data or filepath must be provided for filtering.")
 
 
 def check_match(line, filter_pattern, is_regex, is_casesensitive, is_reverse):
@@ -303,10 +306,10 @@ class InsightLogAnalyzer:
         :param index: int
         :return:
         """
-    try:
-        del self.__filters[index]
-    except IndexError:
-        raise Exception(f"Filter index {index} is out of range.")
+        try:
+            del self.__filters[index]
+        except IndexError:
+            raise Exception(f"Filter index {index} is out of range.")
     
 
     def clear_all_filters(self):
@@ -360,23 +363,38 @@ class InsightLogAnalyzer:
                     raise Exception("The file is empty.")
         return to_return
 
-    def get_requests(self):
+    def get_requests(self, format='list'):
+         # TODO: Add support for CSV and JSON output
         """
-        Analyze data (from the logs) and return list of auth requests formatted as the model (pattern) defined.
-        :return:
+        Analyze data (from the logs) and return list of requests formatted as the model (pattern) defined.
+        :param format: string - 'list', 'json', or 'csv'
+        :return: list, JSON string, or CSV string
         """
-        # TODO: Add support for CSV and JSON output
         data = self.filter_all()
         request_pattern = self.__settings['request_model']
         date_pattern = self.__settings['date_pattern']
         date_keys = self.__settings['date_keys']
+
         if self.__settings['type'] == 'web0':
-            return get_web_requests(data, request_pattern, date_pattern, date_keys)
+            requests = get_web_requests(data, request_pattern, date_pattern, date_keys)
         elif self.__settings['type'] == 'auth':
-            return get_auth_requests(data, request_pattern, date_pattern, date_keys)
+            requests = get_auth_requests(data, request_pattern, date_pattern, date_keys)
         else:
-            # TODO: Support more log formats (e.g., IIS, custom logs)
             return None
+
+        if format == 'json':
+            return json.dumps(requests, indent=2)
+
+        elif format == 'csv':
+            if not requests:
+                return ""
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=requests[0].keys())
+            writer.writeheader()
+            writer.writerows(requests)
+            return output.getvalue()
+
+        return requests
 
     # TODO: Add log level filtering (e.g., only errors)
     def add_log_level_filter(self, level):
@@ -396,11 +414,29 @@ class InsightLogAnalyzer:
         pass  # Feature stub
 
     # TODO: Add export to CSV
+    # def export_to_csv(self, path):
+    #     """
+    #     Export filtered results to a CSV file
+    #     :param path: string
+    #     """
+    #     pass  # Feature stub
     def export_to_csv(self, path):
         """
-        Export filtered results to a CSV file
-        :param path: string
-        """
-        pass  # Feature stub
+    Export filtered results to a CSV file
+    :param path: string - full path to write the CSV output
+    """
+    requests = self.get_requests(format='list')
+    if not requests:
+        logging.warning("No requests to export.")
+        return
+
+    try:
+        with open(path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=requests[0].keys())
+            writer.writeheader()
+            writer.writerows(requests)
+        logging.info(f"Exported {len(requests)} records to CSV: {path}")
+    except Exception as e:
+        logging.error(f"Failed to export CSV to {path}: {e}")
 
 # TODO: Write more tests for edge cases, error handling, and malformed input
