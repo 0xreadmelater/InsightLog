@@ -108,50 +108,62 @@ def check_match(line, filter_pattern, is_regex, is_casesensitive, is_reverse):
 
 def get_web_requests(data, pattern, date_pattern=None, date_keys=None):
     """
-    Analyze data (from the logs) and return list of requests formatted as the model (pattern) defined.
+    Analyze data (from the logs) and return list of web requests in unified format.
     :param data: string
     :param pattern: string
     :param date_pattern: regex|None
     :param date_keys: dict|None
-    :return: list
+    :return: list of dicts
     """
-    # BUG: Output format inconsistent with get_auth_requests
-    # BUG: No handling/logging for malformed lines
     if date_pattern and not date_keys:
         raise Exception("date_keys is not defined")
     requests_dict = re.findall(pattern, data, flags=re.IGNORECASE)
     requests = []
     for request_tuple in requests_dict:
-        if date_pattern:
-            str_datetime = __get_iso_datetime(request_tuple[1], date_pattern, date_keys)
-        else:
-            str_datetime = request_tuple[1]
-        requests.append({'DATETIME': str_datetime, 'IP': request_tuple[0],
-                         'METHOD': request_tuple[2], 'ROUTE': request_tuple[3], 'CODE': request_tuple[4],
-                         'REFERRER': request_tuple[5], 'USERAGENT': request_tuple[6]})
+        str_datetime = __get_iso_datetime(request_tuple[1], date_pattern, date_keys) if date_pattern else request_tuple[1]
+        requests.append({
+            'TYPE': 'web',
+            'DATETIME': str_datetime,
+            'IP': request_tuple[0],
+            'METHOD': request_tuple[2],
+            'ROUTE': request_tuple[3],
+            'CODE': request_tuple[4],
+            'REFERRER': request_tuple[5],
+            'USERAGENT': request_tuple[6],
+            'SERVICE': None,
+            'INVALID_USER': None,
+            'INVALID_PASS_USER': None,
+            'IS_PREAUTH': None,
+            'IS_CLOSED': None
+        })
     return requests
 
 
 def get_auth_requests(data, pattern, date_pattern=None, date_keys=None):
     """
-    Analyze data (from the logs) and return list of auth requests formatted as the model (pattern) defined.
+    Analyze data (from the logs) and return list of auth requests in unified format.
     :param data: string
     :param pattern: string
-    :param date_pattern:
-    :param date_keys:
+    :param date_pattern: regex|None
+    :param date_keys: dict|None
     :return: list of dicts
     """
     requests_dict = re.findall(pattern, data)
     requests = []
     for request_tuple in requests_dict:
-        if date_pattern:
-            str_datetime = __get_iso_datetime(request_tuple[0], date_pattern, date_keys)
-        else:
-            str_datetime = request_tuple[0]
-        data = analyze_auth_request(request_tuple[2])
-        data['DATETIME'] = str_datetime
-        data['SERVICE'] = request_tuple[1]
-        requests.append(data)
+        str_datetime = __get_iso_datetime(request_tuple[0], date_pattern, date_keys) if date_pattern else request_tuple[0]
+        parsed = analyze_auth_request(request_tuple[2])
+        parsed.update({
+            'TYPE': 'auth',
+            'DATETIME': str_datetime,
+            'SERVICE': request_tuple[1],
+            'METHOD': None,
+            'ROUTE': None,
+            'CODE': None,
+            'REFERRER': None,
+            'USERAGENT': None
+        })
+        requests.append(parsed)
     return requests
 
 
