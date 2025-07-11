@@ -62,22 +62,23 @@ def filter_data(log_filter, data=None, filepath=None, is_casesensitive=True, is_
     :param is_reverse: boolean to inverse selection
     :return: string
     """
-    # BUG: This function returns None on error instead of raising
-    # BUG: No encoding handling in file reading (may crash on non-UTF-8 files)
+    # BUG: This function returns None on error instead of raising -- Done
+    # BUG: No encoding handling in file reading (may crash on non-UTF-8 files) -- Done
     # TODO: Log errors/warnings instead of print
     return_data = ""
     if filepath:
         try:
-            with open(filepath, 'r') as file_object:
+            with open(filepath, 'r', encoding='utf-8') as file_object:
                 for line in file_object:
                     if check_match(line, log_filter, is_regex, is_casesensitive, is_reverse):
                         return_data += line
             return return_data
         except (IOError, EnvironmentError) as e:
-            print(e.strerror)
+            #print(e.strerror)
             # TODO: Log error instead of print
             # raise  # Should raise instead of just printing
-            return None
+            raise Exception("Error reading file: " + str(e))
+    # If data is provided, filter it directly
     elif data:
         for line in data.splitlines():
             if check_match(line, log_filter, is_regex, is_casesensitive, is_reverse):
