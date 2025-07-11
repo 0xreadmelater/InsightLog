@@ -339,12 +339,19 @@ class InsightLogAnalyzer:
                     to_return += line+"\n"
         else:
              with open(self.filepath, 'r', encoding='utf-8') as file_object:
-                    lines = file_object.readlines()
-                    if not lines:
-                        raise Exception("The file is empty.")
-                    for line in lines:
-                        if self.check_all_matches(line, self.__filters):
-                            to_return += line
+                    # lines = file_object.readlines()
+                    # if not lines:
+                    #     raise Exception("The file is empty.")
+                    # for line in lines:
+                    #     if self.check_all_matches(line, self.__filters):
+                    #         to_return += line
+                has_data = False
+                for line in file_object:
+                    has_data = True
+                    if self.check_all_matches(line, self.__filters):
+                        to_return += line
+                if not has_data:
+                    raise Exception("The file is empty.")
         return to_return
 
     def get_requests(self):
