@@ -4,7 +4,7 @@ import calendar
 from insightlog.settings import *
 from insightlog.validators import *
 from datetime import datetime
-
+import argparse
 
 def get_service_settings(service_name):
     """
@@ -381,16 +381,55 @@ class InsightLogAnalyzer:
         Add a filter for log level (e.g., ERROR, WARNING)
         :param level: string
         """
-        pass  # Feature stub
-
+        if not isinstance(level, str):
+            raise ValueError("Log level must be a string.")
+        self.add_filter(level, is_casesensitive=False, is_regex=False)
     # TODO: Add support for time range filtering
-    def add_time_range_filter(self, start, end):
+
+    def parse_args():
+        parser = argparse.ArgumentParser(description="Analyze service logs.")
+
+        parser.add_argument("service", help="Name of the service (nginx, apache2, ssh...)")
+        parser.add_argument("-f", "--file", help="Path to the log file", default=None)
+        parser.add_argument("--output", choices=["json", "csv"], help="Output format", default="json")
+        parser.add_argument("--loglevel", help="Log level filter (e.g., ERROR, WARNING)", default=None)
+        parser.add_argument("--start", help="Start datetime in ISO format (e.g., 2025-07-11T00:00:00)", default=None)
+        parser.add_argument("--end", help="End datetime in ISO format", default=None)
+
+        return parser.parse_args()
+    def add_time_range_filter(self, start: datetime, end: datetime):
         """
-        Add a filter for a time range
+        Add a filter for a time range (requires datetime parsing)
         :param start: datetime
         :param end: datetime
         """
-        pass  # Feature stub
+        def time_filter(line):
+            try:
+                date_match = re.findall(self.__settings['date_pattern'], line)
+                if not date_match:
+                    return False
+                date_keys = self.__settings['date_keys']
+                raw_date = date_match[0]
+                months_dict = {v: k for k, v in enumerate(calendar.month_abbr)}
+                log_datetime = datetime(
+                    int(raw_date[date_keys['year']]) if 'year' in date_keys else datetime.now().year,
+                    months_dict[raw_date[date_keys['month']]],
+                    int(raw_date[date_keys['day']].strip()),
+                    int(raw_date[date_keys['hour']]),
+                    int(raw_date[date_keys['minute']]),
+                    int(raw_date[date_keys['second']])
+                )
+                return start <= log_datetime <= end
+            except Exception:
+                return False
+
+        self.__filters.append({
+            'filter_pattern': time_filter,
+            'is_casesensitive': True,
+            'is_regex': False,
+            'is_reverse': False
+        })
+
 
     # TODO: Add export to CSV
     def export_to_csv(self, path):
