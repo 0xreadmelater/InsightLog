@@ -74,10 +74,11 @@ def filter_data(log_filter, data=None, filepath=None, is_casesensitive=True, is_
                         return_data += line
             return return_data
         except (IOError, EnvironmentError) as e:
-            print(e.strerror)
+            #print(e.strerror)
             # TODO: Log error instead of print
             # raise  # Should raise instead of just printing
-            return None
+            raise Exception("Error reading file: " + str(e))
+    # If data is provided, filter it directly
     elif data:
         for line in data.splitlines():
             if check_match(line, log_filter, is_regex, is_casesensitive, is_reverse):
