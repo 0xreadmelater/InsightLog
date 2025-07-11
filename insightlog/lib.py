@@ -4,6 +4,8 @@ import calendar
 from insightlog.settings import *
 from insightlog.validators import *
 from datetime import datetime
+import logging
+logging.basicConfig(level=logging.INFO)
 
 
 def get_service_settings(service_name):
@@ -75,6 +77,7 @@ def filter_data(log_filter, data=None, filepath=None, is_casesensitive=True, is_
                         return_data += line
             return return_data
         except (IOError, EnvironmentError) as e:
+            logging.error(f"Error reading file {filepath}: {e}")
             #print(e.strerror)
             # TODO: Log error instead of print
             # raise  # Should raise instead of just printing
