@@ -296,12 +296,15 @@ class InsightLogAnalyzer:
 
     def remove_filter(self, index):
         """
-        Remove one filter from filters list using it's index
-        :param index:
+        Remove one filter from filters list using its index
+        :param index: int
         :return:
         """
-        # BUG: This method does not remove by index
-        self.__filters.remove(index)
+    try:
+        del self.__filters[index]
+    except IndexError:
+        raise Exception(f"Filter index {index} is out of range.")
+    
 
     def clear_all_filters(self):
         """
