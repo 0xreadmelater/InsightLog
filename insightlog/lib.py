@@ -1,4 +1,5 @@
 import re
+import os
 import calendar
 from insightlog.settings import *
 from insightlog.validators import *
@@ -330,17 +331,20 @@ class InsightLogAnalyzer:
         :return: string
         """
         # BUG: Large files are read into memory at once (performance issue)
-        # BUG: No warning or log for empty files
+        # BUG: No warning or log for empty files - Done
         to_return = ""
         if self.data:
             for line in self.data.splitlines():
                 if self.check_all_matches(line, self.__filters):
                     to_return += line+"\n"
         else:
-            with open(self.filepath, 'r') as file_object:
-                for line in file_object:
-                    if self.check_all_matches(line, self.__filters):
-                        to_return += line
+             with open(self.filepath, 'r', encoding='utf-8') as file_object:
+                    lines = file_object.readlines()
+                    if not lines:
+                        raise Exception("The file is empty.")
+                    for line in lines:
+                        if self.check_all_matches(line, self.__filters):
+                            to_return += line
         return to_return
 
     def get_requests(self):
