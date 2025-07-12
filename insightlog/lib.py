@@ -1,15 +1,18 @@
-import re
-import os
 import calendar
-from insightlog.settings import *
-from insightlog.validators import *
-from datetime import datetime
-import argparse
-import logging
-logging.basicConfig(level=logging.INFO)
-import json
 import csv
 import io
+import json
+import logging
+import os
+import re
+from datetime import datetime
+
+from tqdm import tqdm
+
+from insightlog.settings import *
+from insightlog.validators import *
+
+MONTHS_DICT = {v: k for k, v in enumerate(calendar.month_abbr) if v}
 
 
 def get_service_settings(service_name):
@@ -201,7 +204,7 @@ def analyze_auth_request(request_info):
         }
 
     except Exception as e:
-        print(f"[!] Malformed auth log line: {request_info} — {e}")
+        logging.error(f"Malformed auth log line: {request_info} — {e}")
         return {
             'IP': None,
             'INVALID_USER': None,
@@ -217,11 +220,15 @@ def __get_iso_datetime(str_date, pattern, keys):
     :param keys: dict (date_keys from settings)
     :return: string
     """
-    months_dict = {v: k for k, v in enumerate(calendar.month_abbr)}
     a_date = re.findall(pattern, str_date)[0]
-    d_datetime = datetime(int(a_date[keys['year']]) if 'year' in keys else __get_auth_year(),
-                          months_dict[a_date[keys['month']]], int(a_date[keys['day']].strip()),
-                          int(a_date[keys['hour']]), int(a_date[keys['minute']]), int(a_date[keys['second']]))
+    d_datetime = datetime(
+        int(a_date[keys['year']]) if 'year' in keys else __get_auth_year(),
+        MONTHS_DICT[a_date[keys['month']]],
+        int(a_date[keys['day']].strip()),
+        int(a_date[keys['hour']]),
+        int(a_date[keys['minute']]),
+        int(a_date[keys['second']])
+    )
     return d_datetime.isoformat(' ')
 
 
@@ -340,28 +347,26 @@ class InsightLogAnalyzer:
         Apply all defined patterns and return filtered data
         :return: string
         """
-        # BUG: Large files are read into memory at once (performance issue)
+        # BUG: Large files are read into memory at once (performance issue) Done
         # BUG: No warning or log for empty files - Done
         to_return = ""
         if self.data:
             for line in self.data.splitlines():
                 if self.check_all_matches(line, self.__filters):
-                    to_return += line+"\n"
+                    to_return += line + "\n"
         else:
-             with open(self.filepath, 'r', encoding='utf-8') as file_object:
-                    # lines = file_object.readlines()
-                    # if not lines:
-                    #     raise Exception("The file is empty.")
-                    # for line in lines:
-                    #     if self.check_all_matches(line, self.__filters):
-                    #         to_return += line
-                has_data = False
-                for line in file_object:
-                    has_data = True
-                    if self.check_all_matches(line, self.__filters):
-                        to_return += line
-                if not has_data:
-                    raise Exception("The file is empty.")
+            file_size = os.path.getsize(self.filepath)
+            has_data = False
+            with open(self.filepath, 'r', encoding='utf-8') as file_object:
+                # Progress bar for large files
+                with tqdm(total=file_size, unit='B', unit_scale=True, desc="Filtering log") as pbar:
+                    for line in file_object:
+                        has_data = True
+                        if self.check_all_matches(line, self.__filters):
+                            to_return += line
+                        pbar.update(len(line.encode('utf-8')))
+            if not has_data:
+                raise Exception("The file is empty.")
         return to_return
 
     def get_requests(self, format='list'):
@@ -408,17 +413,6 @@ class InsightLogAnalyzer:
         self.add_filter(level, is_casesensitive=False, is_regex=False)
     # TODO: Add support for time range filtering
 
-    def parse_args():
-        parser = argparse.ArgumentParser(description="Analyze service logs.")
-
-        parser.add_argument("service", help="Name of the service (nginx, apache2, ssh...)")
-        parser.add_argument("-f", "--file", help="Path to the log file", default=None)
-        parser.add_argument("--output", choices=["json", "csv"], help="Output format", default="json")
-        parser.add_argument("--loglevel", help="Log level filter (e.g., ERROR, WARNING)", default=None)
-        parser.add_argument("--start", help="Start datetime in ISO format (e.g., 2025-07-11T00:00:00)", default=None)
-        parser.add_argument("--end", help="End datetime in ISO format", default=None)
-
-        return parser.parse_args()
     def add_time_range_filter(self, start: datetime, end: datetime):
         """
         Add a filter for a time range (requires datetime parsing)
@@ -432,10 +426,9 @@ class InsightLogAnalyzer:
                     return False
                 date_keys = self.__settings['date_keys']
                 raw_date = date_match[0]
-                months_dict = {v: k for k, v in enumerate(calendar.month_abbr)}
                 log_datetime = datetime(
                     int(raw_date[date_keys['year']]) if 'year' in date_keys else datetime.now().year,
-                    months_dict[raw_date[date_keys['month']]],
+                    MONTHS_DICT[raw_date[date_keys['month']]],
                     int(raw_date[date_keys['day']].strip()),
                     int(raw_date[date_keys['hour']]),
                     int(raw_date[date_keys['minute']]),
@@ -452,31 +445,23 @@ class InsightLogAnalyzer:
             'is_reverse': False
         })
 
-
-    # TODO: Add export to CSV
-    # def export_to_csv(self, path):
-    #     """
-    #     Export filtered results to a CSV file
-    #     :param path: string
-    #     """
-    #     pass  # Feature stub
     def export_to_csv(self, path):
         """
-    Export filtered results to a CSV file
-    :param path: string - full path to write the CSV output
-    """
-    requests = self.get_requests(format='list')
-    if not requests:
-        logging.warning("No requests to export.")
-        return
+        Export filtered results to a CSV file
+        :param path: string - full path to write the CSV output
+        """
+        requests = self.get_requests(format='list')
+        if not requests:
+            logging.warning("No requests to export.")
+            return
 
-    try:
-        with open(path, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=requests[0].keys())
-            writer.writeheader()
-            writer.writerows(requests)
-        logging.info(f"Exported {len(requests)} records to CSV: {path}")
-    except Exception as e:
-        logging.error(f"Failed to export CSV to {path}: {e}")
+        try:
+            with open(path, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=requests[0].keys())
+                writer.writeheader()
+                writer.writerows(requests)
+            logging.info(f"Exported {len(requests)} records to CSV: {path}")
+        except Exception as e:
+            logging.error(f"Failed to export CSV to {path}: {e}")
 
 # TODO: Write more tests for edge cases, error handling, and malformed input

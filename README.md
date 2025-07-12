@@ -4,9 +4,14 @@ InsightLog is a Python script for extracting and analyzing data from server log 
 
 ## Features
 
-- Filter log files by date, IP, or custom patterns
+- Filter log files by date, IP, log level, or custom patterns
 - Extract web requests and authentication attempts from logs
 - Analyze logs from Nginx, Apache2, and system Auth logs
+- Export filtered results to JSON or CSV
+- Display progress bar for large log files
+- Command-line interface with flexible output and filtering options
+- Improved error and warning logging
+- Robust handling of malformed or partial log entries
 
 ## Installation
 
